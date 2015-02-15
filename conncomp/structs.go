@@ -10,11 +10,11 @@ type Edge struct {
 // Represents a node in a graph.
 type Node struct {
 	Id         int
-	Neibourghs map[int]*Node
+	Neighbours map[int]*Node
 }
 
 // Create a new node.
-func NewNode(id, set int) *Node {
+func NewNode(id int) *Node {
 	return &Node{
 		id,
 		make(map[int]*Node),
@@ -37,7 +37,7 @@ func NewGraph() *Graph {
 func (g *Graph) fetch(node int) *Node {
 	f, ok := g.Nodes[node]
 	if !ok || f == nil {
-		f = NewNode(node, -1)
+		f = NewNode(node)
 		g.Nodes[node] = f
 	}
 	return f
@@ -47,7 +47,7 @@ func (g *Graph) fetch(node int) *Node {
 func (g *Graph) EdgeList() []*Edge {
 	res := make([]*Edge, 0)
 	for nid, node := range g.Nodes {
-		for toId, _ := range node.Neibourghs {
+		for toId, _ := range node.Neighbours {
 			res = append(res, &Edge{nid, toId})
 		}
 	}
@@ -57,10 +57,10 @@ func (g *Graph) EdgeList() []*Edge {
 // Add a directed edge, taking care of connected components.
 // Panics if either from or to are nil.
 func (g *Graph) directedEdge(from, to *Node) {
-	if _, ok := from.Neibourghs[to.Id]; ok {
+	if _, ok := from.Neighbours[to.Id]; ok {
 		return
 	}
-	from.Neibourghs[to.Id] = to
+	from.Neighbours[to.Id] = to
 }
 
 // Add an undirected edge to the graph.
@@ -169,8 +169,8 @@ func (g *Graph) RemoveRandomEdges(n int, restrictions Mst) []*Edge {
 	defer func() {
 		// do the work of actually removing those edges
 		for _, edge := range result {
-			delete(g.Nodes[edge.From].Neibourghs, edge.To)
-			delete(g.Nodes[edge.To].Neibourghs, edge.From)
+			delete(g.Nodes[edge.From].Neighbours, edge.To)
+			delete(g.Nodes[edge.To].Neighbours, edge.From)
 		}
 	}()
 
@@ -178,7 +178,7 @@ func (g *Graph) RemoveRandomEdges(n int, restrictions Mst) []*Edge {
 	go func(channel chan *Edge, ignore Mst) {
 		seen := make(Mst)
 		for _, node := range g.Nodes {
-			for to, _ := range node.Neibourghs {
+			for to, _ := range node.Neighbours {
 				if seen.Has(node.Id, to) || ignore.Has(node.Id, to) {
 					continue
 				}
