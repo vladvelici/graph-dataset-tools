@@ -10,10 +10,12 @@ var traversalType = [][]int{
 	{2},    // 4
 }
 
-var simpleGraph = [][]int{
-	{1},    // 0
-	{0, 2}, // 1
-	{1},    // 2
+var cyclic = [][]int{
+	{1, 2},    // 0
+	{0, 3, 4}, // 1
+	{0, 4},    // 2
+	{1},       // 3
+	{2, 1},    // 4
 }
 
 func nodeSlice(nodes [][]int) []*Node {
@@ -127,4 +129,104 @@ func TestDfdEdgeParents(t *testing.T) {
 	}
 
 	DfsEdge(nodes[0], visit, visited, f)
+}
+
+func TestBfsTraversal(t *testing.T) {
+	nodes := nodeSlice(traversalType)
+	visits := make([]bool, len(nodes))
+
+	next := []*Node{nodes[0]}
+
+	visit := func(n *Node) {
+		t.Logf("Visiting node %d.\n", n.Id)
+
+		if visits[n.Id] == true {
+			t.Errorf("Re-visiting node %d!", n.Id)
+		}
+
+		visits[n.Id] = true
+
+		if len(next) == 0 && !(n == nodes[1] || n == nodes[2]) {
+			t.Errorf("Bad state. No next and visiting %d", n.Id)
+		}
+
+		if len(next) > 0 && next[0] != n {
+			t.Errorf("Wrong next expected visit. Expecting %d, got %d.", next[0].Id, n.Id)
+		}
+
+		if len(next) > 0 {
+			next = next[1:]
+		}
+
+		if n == nodes[1] {
+			next = append(next, nodes[2], nodes[3], nodes[4])
+		} else if n == nodes[2] {
+			next = append(next, nodes[1], nodes[4], nodes[3])
+		}
+	}
+
+	visited := func(n *Node) bool {
+		return visits[n.Id]
+	}
+
+	Bfs(nodes[0], visit, visited, func(n *Node) {})
+}
+
+func DfsCycles(t *testing.T) {
+	nodes := nodeSlice(cyclic)
+	visits := make([]bool, len(nodes))
+
+	visit := func(n *Node) {
+		t.Logf("Visiting node %d.\n", n.Id)
+
+		if visits[n.Id] == true {
+			t.Errorf("Re-visiting node %d!", n.Id)
+		}
+
+		visits[n.Id] = true
+	}
+
+	visited := func(n *Node) bool {
+		return visits[n.Id]
+	}
+
+	DfsEdge(nodes[0], visit, visited, func(a, b *Node) {})
+}
+
+func BfsCycles(t *testing.T) {
+	nodes := nodeSlice(cyclic)
+	visits := make([]bool, len(nodes))
+
+	visit := func(n *Node) {
+		t.Logf("Visiting node %d.\n", n.Id)
+
+		if visits[n.Id] == true {
+			t.Errorf("Re-visiting node %d!", n.Id)
+		}
+
+		visits[n.Id] = true
+	}
+
+	visited := func(n *Node) bool {
+		return visits[n.Id]
+	}
+
+	Bfs(nodes[0], visit, visited, func(n *Node) {})
+}
+
+// tr_index test
+func TrIndexTest(t *testing.T) {
+	index := make(tr_index)
+	nodes := nodeSlice(cyclic)
+
+	index.visit(nodes[1])
+	index.visit(nodes[3])
+
+	if index.visited(nodes[4]) {
+		t.Error("Node 4 should not be visited.")
+	}
+
+	if index.visited(nodes[1]) {
+		t.Error("Node 1 should be visited.")
+	}
 }
