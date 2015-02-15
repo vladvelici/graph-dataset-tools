@@ -7,14 +7,14 @@ import (
 )
 
 type Mapping struct {
-	index       map[int]int `json:"_"`
-	allocations []int
+	Index       map[int]int `json:"-"`
+	Allocations []int
 }
 
 func NewMapping() *Mapping {
 	return &Mapping{
 		make(map[int]int),
-		make([]int, 0),
+		[]int{-1},
 	}
 }
 
@@ -30,9 +30,9 @@ func ReadMapping(file io.Reader) (*Mapping, error) {
 	}
 
 	// make index from allocations
-	m.index = make(map[int]int, len(m.allocations))
-	for given, id := range m.allocations {
-		m.index[id] = given
+	m.Index = make(map[int]int, len(m.Allocations))
+	for given, id := range m.Allocations {
+		m.Index[id] = given
 	}
 
 	return &m, nil
@@ -51,31 +51,32 @@ func (m *Mapping) Write(file io.Writer) error {
 // Adds or looks up a node to the index, returning its allocated id.
 // Returns (allocatedId, whether it was there before).
 func (m *Mapping) Node(id int) (int, bool) {
-	if given, ok := m.index[id]; ok {
+	if given, ok := m.Index[id]; ok {
 		return given, true
 	}
-	alloc := len(m.allocations)
-	m.index[id] = alloc
-	m.allocations = append(m.allocations, id)
+	alloc := len(m.Allocations)
+	m.Index[id] = alloc
+	m.Allocations = append(m.Allocations, id)
 	return alloc, false
 }
 
 // Returns (given, false) if not allocated. (allocation, true) otherwise.
 func (m *Mapping) Allocation(given int) (int, bool) {
-	if given >= len(m.allocations) || given < 0 {
+	if given >= len(m.Allocations) || given <= 0 {
 		return given, false
 	}
-	return m.allocations[given], true
+	return m.Allocations[given], true
 }
 
 // Removes a node, given by real mapping.
 func (m *Mapping) Remove(id int) bool {
-	given, ok := m.index[id]
+	given, ok := m.Index[id]
 	if !ok {
 		return false
 	}
-	delete(m.index, id)
-	m.allocations[given] = m.allocations[len(m.allocations)-1]
-	m.allocations = m.allocations[:len(m.allocations)-1]
+
+	delete(m.Index, id)
+	m.Allocations[given] = m.Allocations[len(m.Allocations)-1]
+	m.Allocations = m.Allocations[:len(m.Allocations)-1]
 	return true
 }
