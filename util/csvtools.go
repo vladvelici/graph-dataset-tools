@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 )
 
 // Write is a CSV custom writer type.
@@ -51,6 +52,8 @@ func (r *Reader) Read() (int, int, []string, error) {
 	if len(record) < 2 {
 		return 0, 0, record, fmt.Errorf("Not enough data in the record.")
 	}
+	record[0] = strings.TrimSpace(record[0])
+	record[1] = strings.TrimSpace(record[1])
 	a, err := strconv.Atoi(record[0])
 	if err != nil {
 		return 0, 0, record, err
