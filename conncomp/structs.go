@@ -54,6 +54,16 @@ func (g *Graph) EdgeList() []*Edge {
 	return res
 }
 
+func (g *Graph) EachEdge(f func(from, to *Node) bool) {
+	for _, from := range g.Nodes {
+		for _, to := range from.Neighbours {
+			if ok := f(from, to); !ok {
+				return
+			}
+		}
+	}
+}
+
 func (g *Graph) AddDirectedEdge(fromId, toId int) {
 	from := g.fetch(fromId)
 	to := g.fetch(toId)
