@@ -24,6 +24,11 @@ func NewWriter(f io.Writer) *Writer {
 	return &Writer{csv.NewWriter(f)}
 }
 
+func (w *Writer) Flush() error {
+	w.w.Flush()
+	return w.w.Error()
+}
+
 // Write writes a CSV record a,b,rubbish...
 func (w *Writer) Write(a, b int, rubbish []string) error {
 	line := make([]string, len(rubbish)+2)
