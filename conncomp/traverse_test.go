@@ -172,7 +172,7 @@ func TestBfsTraversal(t *testing.T) {
 	Bfs(nodes[0], visit, visited, func(n *Node) {})
 }
 
-func DfsCycles(t *testing.T) {
+func TestDfsCycles(t *testing.T) {
 	nodes := nodeSlice(cyclic)
 	visits := make([]bool, len(nodes))
 
@@ -193,7 +193,7 @@ func DfsCycles(t *testing.T) {
 	DfsEdge(nodes[0], visit, visited, func(a, b *Node) {})
 }
 
-func BfsCycles(t *testing.T) {
+func TestBfsCycles(t *testing.T) {
 	nodes := nodeSlice(cyclic)
 	visits := make([]bool, len(nodes))
 
@@ -215,7 +215,7 @@ func BfsCycles(t *testing.T) {
 }
 
 // tr_index test
-func TrIndexTest(t *testing.T) {
+func TestTrIndex(t *testing.T) {
 	index := make(tr_index)
 	nodes := nodeSlice(cyclic)
 
@@ -226,7 +226,8 @@ func TrIndexTest(t *testing.T) {
 		t.Error("Node 4 should not be visited.")
 	}
 
-	if index.visited(nodes[1]) {
+	if !index.visited(nodes[1]) {
 		t.Error("Node 1 should be visited.")
 	}
+
 }

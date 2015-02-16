@@ -54,6 +54,12 @@ func (g *Graph) EdgeList() []*Edge {
 	return res
 }
 
+func (g *Graph) AddDirectedEdge(fromId, toId int) {
+	from := g.fetch(fromId)
+	to := g.fetch(toId)
+	g.directedEdge(from, to)
+}
+
 // Add a directed edge, taking care of connected components.
 // Panics if either from or to are nil.
 func (g *Graph) directedEdge(from, to *Node) {
@@ -88,6 +94,40 @@ func (t tr_index) visit(node *Node) {
 func (t tr_index) visited(node *Node) bool {
 	_, ok := t[node.Id]
 	return ok
+}
+
+// Returns whether the given graph is connected.
+func (g *Graph) IsConnected() bool {
+	index := make(tr_index)
+	var root *Node
+	for _, n := range g.Nodes {
+		root = n
+		break
+	}
+	Bfs(root, index.visit, index.visited, func(*Node) {})
+
+	for _, n := range g.Nodes {
+		if !index.visited(n) {
+			return false
+		}
+	}
+	return true
+}
+
+// Is undirected
+func (g *Graph) IsUndirected() bool {
+	for _, from := range g.Nodes {
+		for _, to := range from.Neighbours {
+			if n, ok := g.Nodes[to.Id]; ok {
+				if found := n.Neighbours[from.Id]; found != from {
+					return false
+				}
+			} else {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // Return a list of connected graphs.
@@ -197,11 +237,11 @@ func (g *Graph) RemoveRandomEdges(n int, restrictions Mst) []*Edge {
 		result = append(result, edge)
 	}
 
-	for node := range ch {
+	for edge := range ch {
 		n++
 		rnd := rand.Intn(n)
 		if rnd < len(result) {
-			result[rnd] = node
+			result[rnd] = edge
 		}
 	}
 
