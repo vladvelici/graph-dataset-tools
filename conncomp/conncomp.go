@@ -1,126 +1,119 @@
 package main
 
 import (
-	"bufio"
 	"encoding/csv"
 	"flag"
 	"fmt"
-	"io"
-	"os"
 	"strconv"
 	"strings"
-	"sync"
 )
 
 // Define flags.
 var (
-	flagRemove  = flag.Int("remove", 0, "Number of edges to remove from each graph.")
-	flagGraph   = flag.String("graph", "-", "Input file for an edge list csv.")
-	flagOutput  = flag.String("o", "processed", "Output file base name. This program actually outputs many files, depending on the number of connected components in the graph.")
+	flagAction  = flag.String("action", "", "Possibile actions: details, components, remove")
+	flagN       = flag.Int("n", 0, "Number of edges to remove from each graph.")
+	flagOutput  = flag.String("o", "component_", "Output file prefix. It will be followed by the component number and an underscore.")
 	flagVerbose = flag.Bool("verbose", false, "Whether to print lots of debug information on stdout.")
+	flagHelp    = flag.Bool("help", false, "Show this help message")
+	flagH       = flag.Bool("h", false, "Show this help message")
 )
 
+var helpMessage = `conncomp is a tool that deals with connected components tasks.
+
+Possible uses (can optionally add -o and -verbose flags before filelist):
+
+-action details filelist			Outputs details about the graphs in the files. Number of edges, number of nodes, directed/undirected, connected and no. of components.
+-action components filelist			Splits the given graph in connected components files (prefix can be changed with -o flag).
+-action remove -n NR filelist		Removes at most NR random edges from the given graphs. Prefix of file controlled with -o flag.
+
+-h or -help to display this message and quit.
+`
+
+func help() {
+	fmt.Println(helpMessage)
+	flag.PrintDefaults()
+}
+
+type Action func()
+
 func main() {
+	flag.Usage = help
 	flag.Parse()
 
-	var inputStream *bufio.Reader
-	if *flagGraph == "-" {
-		inputStream = bufio.NewReader(os.Stdin)
-	} else {
-		file, err := os.Open(*flagGraph)
-		if err != nil {
-			fmt.Printf("Error reading input file %s\n", err.Error())
-		}
-		inputStream = bufio.NewReader(file)
-		defer file.Close()
-	}
-
-	csvReader := csv.NewReader(inputStream)
-
-	graph := NewGraph()
-
-	for {
-		from, to, err := record(csvReader)
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			fmt.Println("error ", err)
-			return
-		}
-		if *flagVerbose {
-			fmt.Printf("Reading pair\t %d - %d\n", from, to)
-		}
-		graph.AddEdge(from, to)
-	}
-
-	fmt.Fprintf(os.Stderr, "Finished reading graph.\n")
-
-	connectedGraphs := graph.ConnectedGraphs()
-
-	fmt.Fprintf(os.Stderr, "Found %d connected graphs. Now processing them one by one... \n", len(connectedGraphs))
-	var wg sync.WaitGroup
-	for i, g := range connectedGraphs {
-		wg.Add(1)
-		go func(g *Graph, filename string, i, total int) {
-			defer wg.Done()
-			oneGraph(g, filename, i, total)
-		}(g, *flagOutput+strconv.Itoa(i+1), i+1, len(connectedGraphs))
-	}
-	wg.Wait()
-}
-
-func oneGraph(g *Graph, filename string, i, total int) {
-	if *flagVerbose {
-		fmt.Println("Starting graph #", i)
-	}
-
-	var (
-		outputEdgesFilename   = filename + "_edges.csv"
-		outputRemovedFilename = filename + "_removed.csv"
-	)
-
-	// opening output files...
-	outputEdges, err := os.Create(outputEdgesFilename)
-	if err != nil {
-		fmt.Printf("Graph #%d: Unable to open 'edges' output file %s. ( %s )", i, outputEdgesFilename, err)
-		return
-	}
-	outputRemoved, err := os.Create(outputRemovedFilename)
-	if err != nil {
-		fmt.Printf("Graph #%d: Unable to open 'removed' output file %s. ( %s )", i, outputRemovedFilename, err)
+	if *flagHelp || *flagH {
+		help()
 		return
 	}
 
-	spanningTree := g.Mst()
-	fmt.Fprintf(os.Stderr, "Computed spanning tree for graph %d.\n", i)
-
-	removed := g.RemoveRandomEdges(*flagRemove, spanningTree)
-	fmt.Fprintf(os.Stderr, "Some random edges removed for graph #%d.\n", i)
-
-	for _, edge := range removed {
-		if *flagVerbose {
-			fmt.Printf("%d, %d, \"removed\"\n", edge.From, edge.To)
-		}
-		_, err = fmt.Fprintf(outputRemoved, "%d, %d\n", edge.From, edge.To)
-		if err != nil {
-			fmt.Printf("Graph #%d: Error printing removed edge. (%s)", i, err)
-		}
+	if *flagAction == "" {
+		fmt.Println("Need to specify an action! See -help.")
+		return
 	}
 
-	allEdges := g.EdgeList()
-	for _, edge := range allEdges {
-		if *flagVerbose {
-			fmt.Printf("%d, %d, \"remaining\"\n", edge.From, edge.To)
-		}
-		_, err = fmt.Fprintf(outputEdges, "%d, %d\n", edge.From, edge.To)
-		if err != nil {
-			fmt.Printf("Graph #%d: Error printing remaining edge. (%s)", i, err)
-		}
+	controller := map[string]Action{
+		"details":    actionDetails,
+		"components": actionComponents,
+		"remove":     actionRemove,
 	}
 
-	fmt.Fprintf(os.Stderr, "Finished processing graph number %d of %d.\n", i, total)
+	action, ok := controller[*flagAction]
+	if !ok {
+		fmt.Print("Invalid action! See -help for info. Available actions are: ")
+		for txt, _ := range controller {
+			fmt.Print(txt)
+			fmt.Print(" ")
+		}
+		fmt.Println()
+		return
+	}
+
+	action()
 }
+
+// Return whether the given graphs are directed on undirected.
+func actionDetails() {
+	files := flag.Args()
+	fmt.Println("filename\t\tType\t\tConnected?\t#components\t#nodes\t#edges")
+	fmt.Println("========\t\t====\t\t==========\t===========\t======\t======")
+	for _, f := range files {
+		graph, err := ReadGraph(f)
+		if err != nil {
+			fmt.Printf("%s \t\t Cannot read graph (%s).\n", f, err.Error())
+			continue
+		}
+
+		fmt.Printf("%s\t\t", f)
+		undir := graph.IsUndirected()
+		if undir {
+			fmt.Print("Undirected\t")
+		} else {
+			fmt.Print("Directed\t")
+		}
+
+		components := graph.ConnectedGraphs()
+		if len(components) <= 1 {
+			fmt.Print("connected\t")
+		} else {
+			fmt.Print("disconnected\t")
+		}
+
+		fmt.Printf("%d\t\t", len(components))
+		fmt.Printf("%d\t", len(graph.Nodes))
+
+		var noEdges int
+		edges := graph.EdgeList()
+		if undir {
+			noEdges = len(edges) / 2
+		} else {
+			noEdges = len(edges)
+		}
+
+		fmt.Printf("%d\n", noEdges)
+	}
+}
+
+func actionComponents() {}
+func actionRemove()     {}
 
 func record(r *csv.Reader) (int, int, error) {
 	rec, err := r.Read()
