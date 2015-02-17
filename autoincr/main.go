@@ -147,7 +147,10 @@ func apply(indexPath string, files []string, prefix string) error {
 			}
 		}
 
-		err1, err2 := input.Close(), output.Close()
+		ferr, err1, err2 := outputCsv.Flush(), input.Close(), output.Close()
+		if ferr != nil {
+			return ferr
+		}
 		if err1 != nil {
 			return err1
 		}
@@ -221,7 +224,10 @@ func revert(indexPath string, files []string, prefix string) error {
 			}
 		}
 
-		err1, err2 := input.Close(), output.Close()
+		ferr, err1, err2 := outputCsv.Flush(), input.Close(), output.Close()
+		if ferr != nil {
+			return ferr
+		}
 		if err1 != nil {
 			return err1
 		}
@@ -280,7 +286,10 @@ func mkapply(indexPath string, files []string, prefix string) error {
 			}
 		}
 
-		err1, err2 := input.Close(), output.Close()
+		ferr, err1, err2 := outputCsv.Flush(), input.Close(), output.Close()
+		if ferr != nil {
+			return ferr
+		}
 		if err1 != nil {
 			return err1
 		}

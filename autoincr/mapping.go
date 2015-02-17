@@ -11,6 +11,7 @@ type Mapping struct {
 	Allocations []int
 }
 
+// Create an empty mapping.
 func NewMapping() *Mapping {
 	return &Mapping{
 		make(map[int]int),
@@ -18,6 +19,7 @@ func NewMapping() *Mapping {
 	}
 }
 
+// ReadMapping reads a mapping from a reader.
 func ReadMapping(file io.Reader) (*Mapping, error) {
 	raw, err := ioutil.ReadAll(file)
 	if err != nil {
