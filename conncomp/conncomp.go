@@ -1,12 +1,11 @@
 package main
 
 import (
-	"encoding/csv"
 	"flag"
 	"fmt"
+	"math"
 	"os"
 	"strconv"
-	"strings"
 
 	"github.com/vladvelici/graph-dataset-tools/util"
 )
@@ -14,9 +13,11 @@ import (
 // Define flags.
 var (
 	flagAction  = flag.String("action", "", "Possibile actions: details, components, remove")
-	flagN       = flag.Int("n", 0, "Number of edges to remove from each graph.")
+	flagN       = flag.Float64("n", 0, "\\% of edges to remove from each graph.")
 	flagOutput  = flag.String("o", "component_", "Output file prefix. It will be followed by the component number and an underscore.")
 	flagVerbose = flag.Bool("verbose", false, "Whether to print lots of debug information on stdout.")
+	flagAll     = flag.Bool("all", false, "Whether to print all edges (to->from and from->to) when removing, in the removed list.")
+	flagForce   = flag.Bool("force", false, "Do not make safety checks. Might be faster.")
 	flagHelp    = flag.Bool("help", false, "Show this help message")
 	flagH       = flag.Bool("h", false, "Show this help message")
 )
@@ -27,7 +28,7 @@ Possible uses (can optionally add -o and -verbose flags before filelist):
 
 -action details filelist			Outputs details about the graphs in the files. Number of edges, number of nodes, directed/undirected, connected and no. of components.
 -action components filelist			Splits the given graph in connected components files (prefix can be changed with -o flag).
--action remove -n P filelist		Removes at most P% random edges from the given graphs. Prefix of file controlled with -o flag.
+-action remove -n P [-all] filelist	Removes at most P% random edges from the given graphs. Prefix of file controlled with -o flag.
 -action force-undirected			Force the graph into an undirected graph. Writes to a different file.
 
 -h or -help to display this message and quit.
@@ -117,7 +118,7 @@ func actionDetails() {
 	}
 }
 
-// get a graph, split it into compoments, write back the graph..
+// Splits graphs into their connected compoments, and writes those components as separate files.
 func actionComponents() {
 	files := flag.Args()
 	for _, f := range files {
@@ -156,7 +157,7 @@ func actionComponents() {
 	}
 }
 
-// get a (perhaps directed) graph and make it directed.
+// Get (perhaps directed) graphs and make them directed by forcing all edges to be bi-directional.
 func actionForceUndirected() {
 	files := flag.Args()
 	for _, f := range files {
@@ -189,35 +190,109 @@ func actionForceUndirected() {
 		})
 		err = writer.Flush()
 		if err != nil {
-			fmt.Printf("%s: (FLUSH) Output might be corrupted.")
+			fmt.Printf("%s: (FLUSH) Output might be corrupted.", f)
 		}
 		err = wr.Close()
 		if err != nil {
-			fmt.Printf("%s: (CLOSE) Output might be corrupted.")
+			fmt.Printf("%s: (CLOSE) Output might be corrupted.", f)
 		}
 	}
 }
 
-// get a graph, assume it's connected and undirected. Remove random edges from it.
-func actionRemove() {
+// write a graph
+func writeGraph(graph *Graph, fname string) error {
+	wr, err := os.Create(fname)
+	if err != nil {
+		return fmt.Errorf("Cannot write to %s, skipping file. (%s)", fname, err.Error())
+	}
+	writer := util.NewWriter(wr)
+	err = nil
+	graph.EachEdge(func(from, to *Node) bool {
+		err := writer.Write(from.Id, to.Id, nil)
+		if err != nil {
+			err = fmt.Errorf("Cannot write edge to %s, aborting this graph. (%s)", fname, err.Error())
+			return false
+		}
+		return true
+	})
+	if err != nil {
+		return err
+	}
+	err = writer.Flush()
+	if err != nil {
+		return fmt.Errorf("(FLUSH) Output might be corrupted. (%s)", err.Error())
+	}
+	err = wr.Close()
+	if err != nil {
+		return fmt.Errorf("(CLOSE) Output might be corrupted. (%s)", err.Error())
+	}
+	return nil
 }
 
-func record(r *csv.Reader) (int, int, error) {
-	rec, err := r.Read()
-	if err != nil {
-		return 0, 0, err
+// Remove random edges from a graph using a spanning tree to assure connectness.
+func actionRemove() {
+	files := flag.Args()
+	for _, f := range files {
+		graph, err := ReadGraph(f)
+		if err != nil {
+			fmt.Printf("%s: Cannot read graph. Skipping. (%s)\n", f, err.Error())
+			continue
+		}
+
+		if !*flagForce && !graph.IsConnected() {
+			fmt.Printf("%s: Graph not connected. Skipping. Use the --force to do it anyway.\n", f)
+			continue
+		}
+
+		if !*flagForce && !graph.IsUndirected() {
+			fmt.Printf("%s: Graph is directed. Skipping. Use the --force to do it anyway.\n", f)
+			continue
+		}
+
+		edges := len(graph.EdgeList())
+		remove := int(math.Floor(*flagN*float64(edges)/2 + 0.5))
+		mst := graph.Mst()
+		removed := graph.RemoveRandomEdges(remove, mst)
+
+		// write out the processed graph
+		fname := *flagOutput + f
+		err = writeGraph(graph, fname)
+		if err != nil {
+			fmt.Printf("%s: %s\n", err.Error())
+			continue
+		}
+
+		fname = *flagOutput + "removed_" + f
+		wr, err := os.Create(fname)
+		if err != nil {
+			fmt.Printf("%s: Cannot write to %s, skipping file. (%s)", f, fname, err.Error())
+			continue
+		}
+
+		writer := util.NewWriter(wr)
+		for _, edge := range removed {
+			err = writer.Write(edge.From, edge.To, nil)
+			if err != nil {
+				fmt.Printf("%s: Cannot write edge to %s. Skipping remaining of graph. (%s)", f, fname, err.Error())
+				break
+			}
+			if *flagAll {
+				err = writer.Write(edge.To, edge.From, nil)
+				if err != nil {
+					fmt.Printf("%s: Cannot write (reverse) edge to %s. Skipping remaining of graph. (%s)", f, fname, err.Error())
+					break
+				}
+			}
+		}
+
+		err = writer.Flush()
+		if err != nil {
+			fmt.Printf("%s: (FLUSH) Output might be corrupted.", f)
+		}
+		err = wr.Close()
+		if err != nil {
+			fmt.Printf("%s: (CLOSE) Output might be corrupted.", f)
+		}
+
 	}
-	if len(rec) != 2 {
-		return 0, 0, fmt.Errorf("Wrong record %#v.", rec)
-	}
-	rec[0], rec[1] = strings.TrimSpace(rec[0]), strings.TrimSpace(rec[1])
-	a, err := strconv.Atoi(rec[0])
-	if err != nil {
-		return 0, 0, err
-	}
-	b, err := strconv.Atoi(rec[1])
-	if err != nil {
-		return 0, 0, err
-	}
-	return a, b, nil
 }
