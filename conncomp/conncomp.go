@@ -24,14 +24,24 @@ var (
 
 var helpMessage = `conncomp is a tool that deals with connected components tasks.
 
-Possible uses (can optionally add -o and -verbose flags before filelist):
+Usage:
 
--action details filelist			Outputs details about the graphs in the files. Number of edges, number of nodes, directed/undirected, connected and no. of components.
--action components filelist			Splits the given graph in connected components files (prefix can be changed with -o flag).
--action remove -n P [-all] filelist	Removes at most P% random edges from the given graphs. Prefix of file controlled with -o flag.
--action force-undirected			Force the graph into an undirected graph. Writes to a different file.
+conncomp -action <action> [flags] <list of edge lists>
 
--h or -help to display this message and quit.
+Possible actions:
+
+  details           Output details about the graphs.
+  components        Splits the graph(s) in connected components.
+  remove -n P       Removes at most P% random edges from graph(s).
+  force-undirected  Force the graph(s) into undirected graph(s).
+
+All actions except 'details' output in new files whose names are controlled
+with the flag -o <file-prefix>.
+
+Use the -h or -help flag to display this message and quit.
+
+Full list of flags:
+
 `
 
 func help() {
